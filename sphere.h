@@ -14,8 +14,10 @@ class Sphere : public Object
         Sphere(Vector centre, double radius, Color color);
 
         double getRadius();
+        Vector getPerpendicularAt(Vector point);
         Vector getCentre();
         Color getColor();
+        double intersection(Ray ray);
 
     private:
         double mRadius;

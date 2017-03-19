@@ -36,7 +36,7 @@ double Plane::intersection(Ray ray)
     if (theta == 0)             // Parallel to Plane, hence never intersect it
         return -1;
     else {
-        double temp = mPerpendicular.dotProduct(ray.getOrigin().add(mPerpendicular.multiply(mDistance).negative()));
+        double temp = mPerpendicular.dotProduct(ray.getOrigin()+(-(mPerpendicular.multiply(mDistance))));
         return -1*temp/theta;
     }
 }

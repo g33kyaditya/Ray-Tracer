@@ -11,11 +11,11 @@ class Vector
 
         Vector normalize();
         double magnitude();
-        Vector negative();
+        Vector operator-();
         Vector multiply(double factor);
         double dotProduct(Vector vec);
         Vector crossProduct(Vector vec);
-        Vector add(Vector vec);
+        Vector operator+(Vector vec);
 
         double getX();
         double getY();

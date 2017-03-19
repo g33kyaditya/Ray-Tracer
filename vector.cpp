@@ -14,7 +14,7 @@ Vector::Vector(double x, double y, double z)
     mZ = z;
 }
 
-Vector Vector::add(Vector vec)
+Vector Vector::operator+(Vector vec)
 {
     double x, y, z;
     x = mX + vec.getX();
@@ -53,7 +53,7 @@ double Vector::magnitude()
     return sqrt ( (mX*mX) + (mY*mY) + (mZ*mZ) );
 }
 
-Vector Vector::negative()
+Vector Vector::operator-()
 {
     return Vector( (-mX), (-mY), (-mZ) );
 }

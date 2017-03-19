@@ -2,13 +2,14 @@
 #include <string>
 #include <vector>
 #include <climits>
-#include <fstream>
 #include <sstream>
 #include <cmath>
+#include <algorithm>
 #include <time.h>
 #include <stdlib.h>
 #include <stdio.h>
 
+#include "defines.h"
 #include "vector.h"
 #include "camera.h"
 #include "color.h"
@@ -16,75 +17,32 @@
 #include "sphere.h"
 #include "plane.h"
 
-struct RGB{
-    double red;
-    double green;
-    double blue;
-};
+using namespace std;
 
-void saveBitmap(const char * fileName, int width, int height, int dpi, RGB * data) {
-    FILE *file;
-    int k = width * height;
-    int s = 4 * k;
-    int fileSize = 54 + s; 
+int findClosestObject(vector<double> intersections) {
+    int result;
+    if (intersections.empty())
+        return -1;
 
-    double factor = 39.375;
-    int m = static_cast<int>(factor);
-
-    int ppm = dpi * m;
-
-    unsigned char bitmapFileHeader[14] = {'B', 'M', 0, 0, 0, 0, 0, 0, 0, 0, 54, 0, 0, 0};
-    unsigned char bitmapInfoHeader[40] = {40, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 24, 0};
-
-    bitmapFileHeader[2] = (unsigned char) (fileSize);
-    bitmapFileHeader[3] = (unsigned char) (fileSize >> 8);
-    bitmapFileHeader[4] = (unsigned char) (fileSize >> 16);
-    bitmapFileHeader[5] = (unsigned char) (fileSize >> 24);
-
-    bitmapInfoHeader[4] = (unsigned char) (width);
-    bitmapInfoHeader[5] = (unsigned char) (width >> 8);
-    bitmapInfoHeader[6] = (unsigned char) (width >> 16);
-    bitmapInfoHeader[7] = (unsigned char) (width >> 24);
-
-    bitmapInfoHeader[8] = (unsigned char) (height);
-    bitmapInfoHeader[9] = (unsigned char) (height >> 8);
-    bitmapInfoHeader[10] = (unsigned char) (height >> 16);
-    bitmapInfoHeader[11] = (unsigned char) (height >> 24);
-
-    bitmapInfoHeader[21] = (unsigned char) (s);
-    bitmapInfoHeader[22] = (unsigned char) (s >> 8);
-    bitmapInfoHeader[23] = (unsigned char) (s >> 16);
-    bitmapInfoHeader[24] = (unsigned char) (s >> 24);
-
-    bitmapInfoHeader[25] = (unsigned char) (ppm);
-    bitmapInfoHeader[26] = (unsigned char) (ppm >> 8);
-    bitmapInfoHeader[27] = (unsigned char) (ppm >> 16);
-    bitmapInfoHeader[28] = (unsigned char) (ppm >> 24);
-
-    bitmapInfoHeader[29] = (unsigned char) (ppm);
-    bitmapInfoHeader[30] = (unsigned char) (ppm >> 8);
-    bitmapInfoHeader[31] = (unsigned char) (ppm >> 16);
-    bitmapInfoHeader[32] = (unsigned char) (ppm >> 24);
-
-    file = fopen(fileName, "wb");
-    fwrite(bitmapFileHeader, 1, 14, file);
-    fwrite(bitmapInfoHeader, 1, 40, file);
-
-    for (int i = 0; i < k; i++) {
-        RGB rgb = data[i];
-
-        double red = data[i].red * 255;
-        double green = data[i].green * 255;
-        double blue = data[i].blue * 255;
-
-        unsigned char color[3] = { (int)floor(blue), (int)floor(green), (int)floor(red) };
-        fwrite(color, 1, 3, file);
+    if (intersections.size() == 1) {
+        if (intersections[0] > 0)
+            return 0;
+        else
+            return -1;
     }
 
-    fclose(file);
+    double max = *std::max_element(intersections.begin(), intersections.end());
+    if (max > 0) {
+        for (int i = 0; i < intersections.size(); i++) {
+            if (intersections[i] <= max && intersections[i] > 0) {
+                max = intersections[i];
+                result = i;
+            }
+        }
+        return result;
+    }
+    return -1;
 }
-
-using namespace std;
 
 int main(int argc, char * argv[]) {
 
@@ -94,6 +52,8 @@ int main(int argc, char * argv[]) {
     int current;
     int total = width * height;
     RGB * pixels = new RGB[total];
+    int aspectRatio = (double)width/(double)height;
+    double xAmount, yAmount;
 
     Vector X(1, 0, 0);
     Vector Y(0, 1, 0);
@@ -104,7 +64,7 @@ int main(int argc, char * argv[]) {
     Vector cameraSource(3, 1.5, -4);
     Vector cameraDest(0, 0, 0);
     Vector difference(cameraSource.getX() - cameraDest.getX(), cameraSource.getY() - cameraDest.getY(), cameraSource.getZ() - cameraDest.getZ());
-    Vector cameraDirection = difference.negative().normalize();
+    Vector cameraDirection = -(difference.normalize());
     Vector cameraRight = Y.crossProduct(cameraDirection).normalize();
     Vector cameraDown = cameraRight.crossProduct(cameraDirection);
     Camera camera(cameraSource, cameraDirection, cameraRight, cameraDown);
@@ -114,7 +74,7 @@ int main(int argc, char * argv[]) {
     Vector lightPosition(-7, 10, -10);
     Light sceneLight(lightPosition, whiteLight);
 
-    //Object Spec
+    //Sphere Spec
     Color greenColor = Color(0.5, 1.0, 0.5, 0.3);
     Sphere sceneSphere(Origin, 10, greenColor);
 
@@ -122,10 +82,39 @@ int main(int argc, char * argv[]) {
     Color purpleColor(153, 0, 153, 0);
     Plane scenePlane(Y, -1, purpleColor);
 
+    vector<Object*> sceneObjects;
+    sceneObjects.push_back(dynamic_cast<Object*>(&sceneSphere));
+    sceneObjects.push_back(dynamic_cast<Object*>(&scenePlane));
 
     for (int x = 0; x < width; x++) {
         for (int y = 0; y < height; y++) {
             current = y * width + x;
+
+            // Image Plane Spec for Camera
+            if (width > height) {
+                xAmount = ((x + 0.5)/width)*aspectRatio - ((width - height)/(double)(height/2));
+                yAmount = ((height - y) + 0.5)/height;
+            }
+            else if (height > width) {
+                xAmount = (x + 0.5)/width;
+                yAmount = (((height - y) + 0.5)/height)/aspectRatio - ((height - width)/(double)width/2);
+            }
+            else {
+                xAmount = (x + 0.5)/width;
+                yAmount = ((height - y) + 0.5)/height;
+            }
+
+            Vector cameraRayFromOrigin = camera.getPosition();
+            Vector cameraRayDirection = cameraDirection + (cameraRight.multiply(xAmount - 0.5)+(cameraDown.multiply(yAmount - 0.5))).normalize();
+            Ray cameraRay(cameraRayFromOrigin, cameraRayDirection);
+
+            //Find intersection of Object with Camera Ray
+            vector<double> intersections;
+            for (auto object : sceneObjects) {
+                intersections.push_back(object->findIntersection(cameraRay));
+            }
+
+            int closestObjectIndex = findClosestObject(intersections);
 
             if ((x > 200 && x < 440) && (y > 200 && y < 440)) {
                 pixels[current].red = 0;
